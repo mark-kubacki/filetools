@@ -29,6 +29,23 @@
 static const int EXIT_INVALIDARGUMENT = 2;
 #endif
 
+#if !(defined(_GNU_SOURCE) && defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2,27))
+#include <sys/syscall.h>
+
+static inline ssize_t
+copy_file_range(int __infd, loff_t *__pinoff,
+  int __outfd, loff_t *__poutoff, size_t __length, unsigned int __flags)
+{
+#  ifdef __NR_copy_file_range
+  return syscall(__NR_copy_file_range, __infd, __pinoff,
+    __outfd, __poutoff, __length, __flags);
+#  else
+  errno = ENOSYS;
+  return -1;
+#  endif
+}
+#endif
+
 static int has_copy_file_range = 1; // since Linux 5.3
 static int has_ficlone = 1;         // 4.5, for BTRFS 2.6.35
 static int has_otmpfile = 1;        // 3.11
@@ -160,7 +177,6 @@ main(int argc, char **argv) {
     size_t remain = finfo.st_size; // Amount yet to read from the input file.
     ssize_t n = 0; // Bytes transferred by the last operation.
 
-#if defined(_GNU_SOURCE) && defined(__GLIBC_PREREQ) && __GLIBC_PREREQ(2,27)
     if (has_copy_file_range) {
       static const size_t max_count = 1<<30;
       do {
@@ -185,7 +201,6 @@ main(int argc, char **argv) {
         fd_size += n;
       } while (remain > 0 && n > 0);
     }
-#endif
 
     // ficlone is a fallback, and unless something very unlikely and strange
     // happened, will be called with the input file from 0 to its end here.
